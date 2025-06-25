@@ -19,7 +19,7 @@ async def generate_video(prompt: str = Form(...),
                          image2: UploadFile = File(None)):
 
     try:
-        print(f"[INFO] Received prompt: {prompt}")
+        print(f"[INFO] Received prompt: {prompt}",flush=True)
 
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img1:
             temp_img1.write(await image1.read())
@@ -47,7 +47,7 @@ async def generate_video(prompt: str = Form(...),
             "--frame_num", "81"
         ]
 
-        print(f"[INFO] Running command: {' '.join(cmd)}")
+        print(f"[INFO] Running command: {' '.join(cmd)}",,flush=True)
         subprocess.run(cmd, check=True)
 
         new_files = set(os.listdir(OUTPUT_DIR)) - existing_files
@@ -57,7 +57,7 @@ async def generate_video(prompt: str = Form(...),
             return JSONResponse(status_code=500, content={"error": "No .mp4 file was created."})
 
         latest_file = max([os.path.join(OUTPUT_DIR, f) for f in mp4_files], key=os.path.getctime)
-        print(f"[SUCCESS] Returning file: {latest_file}")
+        print(f"[SUCCESS] Returning file: {latest_file}",,flush=True)
 
         return FileResponse(latest_file, media_type="video/mp4", filename=os.path.basename(latest_file))
 
