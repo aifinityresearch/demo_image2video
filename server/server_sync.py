@@ -5,6 +5,14 @@ import os
 import uuid
 import uvicorn
 import tempfile
+import logging
+
+# ✅ Setup logging before app starts
+logging.basicConfig(
+    filename="log_server.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 app = FastAPI()
 
@@ -19,7 +27,7 @@ async def generate_video(prompt: str = Form(...),
                          image2: UploadFile = File(None)):
 
     try:
-        print(f"[INFO] Received prompt: {prompt}",flush=True)
+        logging.info(f"Received prompt: {prompt}")
 
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img1:
             temp_img1.write(await image1.read())
@@ -34,7 +42,6 @@ async def generate_video(prompt: str = Form(...),
                 image_paths.append(img2_path)
 
         src_refs = ",".join(image_paths)
-
         existing_files = set(os.listdir(OUTPUT_DIR))
 
         cmd = [
@@ -47,23 +54,30 @@ async def generate_video(prompt: str = Form(...),
             "--frame_num", "81"
         ]
 
-        print(f"[INFO] Running command: {' '.join(cmd)}",flush=True)
+        logging.info(f"Running command: {' '.join(cmd)}")
         subprocess.run(cmd, check=True)
 
         new_files = set(os.listdir(OUTPUT_DIR)) - existing_files
         mp4_files = [f for f in new_files if f.endswith(".mp4")]
 
         if not mp4_files:
+            logging.error("No .mp4 file was created.")
             return JSONResponse(status_code=500, content={"error": "No .mp4 file was created."})
 
-        latest_file = max([os.path.join(OUTPUT_DIR, f) for f in mp4_files], key=os.path.getctime)
-        print(f"[SUCCESS] Returning file: {latest_file}",flush=True)
+        latest_file = max(
+            [os.path.join(OUTPUT_DIR, f) for f in mp4_files],
+            key=os.path.getctime
+        )
 
+        logging.info(f"Returning video: {latest_file}")
         return FileResponse(latest_file, media_type="video/mp4", filename=os.path.basename(latest_file))
 
     except subprocess.CalledProcessError as e:
+        logging.exception("Subprocess failed.")
         return JSONResponse(status_code=500, content={"error": f"Generation failed: {e}"})
+
     except Exception as e:
+        logging.exception("Unhandled exception occurred.")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 if __name__ == "__main__":
