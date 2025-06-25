@@ -20,7 +20,11 @@ os.makedirs(IMAGE_DIR, exist_ok=True)
 @app.post("/generate-video/")
 async def generate_video(prompt: str = Form(...), image: UploadFile = File(...)):
     print("Received a video generation request.")
-    existing_files = set(os.listdir(OUTPUT_DIR))
+    if os.path.exists(OUTPUT_DIR):
+        existing_files = set(os.listdir(OUTPUT_DIR))
+    else:
+        existing_files = set()
+
     # Save uploaded image
     image_id = str(uuid.uuid4())
     image_filename = f"{image_id}_{image.filename}"
