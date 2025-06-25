@@ -6,10 +6,13 @@ import uuid
 import uvicorn
 import tempfile
 import logging
+# Determine path of server.py
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_FILE = os.path.join(CURRENT_DIR, "log_server.log")
 
 # ✅ Setup logging before app starts
 logging.basicConfig(
-    filename="log_server.log",
+    filename=LOG_FILE,
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
