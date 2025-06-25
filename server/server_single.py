@@ -3,18 +3,18 @@ from fastapi.responses import FileResponse, JSONResponse
 import os
 import subprocess
 import uuid
+import glob
 
 app = FastAPI()
 
-OUTPUT_DIR = "/home/ubuntu/VACE/demo_image2video/server/generated_videos"
 IMAGE_DIR = "/home/ubuntu/VACE/demo_image2video/server/uploaded_images"
+RESULTS_DIR = "/home/ubuntu/VACE/demo_image2video/server/results/vace-1.3B"
 VACE_SCRIPT = "/home/ubuntu/VACE/vace/vace_wan_inference.py"
 MODEL_NAME = "vace-1.3B"
 CKPT_DIR = "/home/ubuntu/VACE/models/Wan2.1-VACE-1.3B"
 DEFAULT_SIZE = "480p"
 DEFAULT_FRAMES = "81"
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
 @app.post("/generate-video/")
@@ -29,11 +29,9 @@ async def generate_video(prompt: str = Form(...), image: UploadFile = File(...))
     with open(image_path, "wb") as f:
         content = await image.read()
         f.write(content)
+
     print(f"Image saved: {image_path}")
     print(f"Prompt: {prompt}")
-
-    # Track existing output files before execution
-    existing_files = set(os.listdir(OUTPUT_DIR))
 
     # Run generation script
     cmd = [
@@ -45,7 +43,7 @@ async def generate_video(prompt: str = Form(...), image: UploadFile = File(...))
         "--size", DEFAULT_SIZE,
         "--frame_num", DEFAULT_FRAMES
     ]
-    print(f" Running: {' '.join(cmd)}")
+    print(f"Running: {' '.join(cmd)}")
 
     try:
         subprocess.run(cmd, check=True)
@@ -56,18 +54,13 @@ async def generate_video(prompt: str = Form(...), image: UploadFile = File(...))
         print(f"Unexpected error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-    # Detect the new .mp4 file
-    new_files = set(os.listdir(OUTPUT_DIR)) - existing_files
-    mp4_files = [f for f in new_files if f.endswith(".mp4")]
-
-    if not mp4_files:
-        print("No output .mp4 found.")
+    # Search for the latest out_video.mp4 in timestamped result folders
+    video_candidates = glob.glob(os.path.join(RESULTS_DIR, "*", "out_video.mp4"))
+    if not video_candidates:
+        print("No output video file found.")
         return JSONResponse(status_code=500, content={"error": "Video generation failed."})
 
-    latest_file = max(
-        [os.path.join(OUTPUT_DIR, f) for f in mp4_files],
-        key=os.path.getctime
-    )
+    latest_file = max(video_candidates, key=os.path.getctime)
     print(f"Returning generated video: {latest_file}")
 
     return FileResponse(latest_file, media_type="video/mp4", filename=os.path.basename(latest_file))
