@@ -57,7 +57,7 @@ async def generate_video(prompt: str = Form(...),
             return JSONResponse(status_code=500, content={"error": "No .mp4 file was created."})
 
         latest_file = max([os.path.join(OUTPUT_DIR, f) for f in mp4_files], key=os.path.getctime)
-        print(f"[SUCCESS] Returning file: {latest_file}",,flush=True)
+        print(f"[SUCCESS] Returning file: {latest_file}",flush=True)
 
         return FileResponse(latest_file, media_type="video/mp4", filename=os.path.basename(latest_file))
 
