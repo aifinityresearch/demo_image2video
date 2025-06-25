@@ -9,6 +9,13 @@ import asyncio
 
 app = FastAPI()
 
+@app.middleware("http")
+async def log_all_requests(request, call_next):
+    print(f"[DEBUG] Incoming request: {request.method} {request.url}")
+    response = await call_next(request)
+    return response
+
+
 # Paths
 SCRIPT_PATH = "/home/ubuntu/VACE/vace/vace_wan_inference.py"
 MODEL_DIR = "/home/ubuntu/VACE/models/Wan2.1-VACE-1.3B"
