@@ -4,16 +4,15 @@ import subprocess
 import os
 import uuid
 import uvicorn
+import tempfile
+import asyncio
 
 app = FastAPI()
 
 # Paths
 SCRIPT_PATH = "/home/ubuntu/VACE/vace/vace_wan_inference.py"
 MODEL_DIR = "/home/ubuntu/VACE/models/Wan2.1-VACE-1.3B"
-UPLOAD_DIR = "/home/ubuntu/VACE/uploads"
 OUTPUT_DIR = os.getcwd()
-
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.post("/generate_i2v")
 async def generate_video(prompt: str = Form(...),
@@ -23,20 +22,20 @@ async def generate_video(prompt: str = Form(...),
     try:
         print(f"[INFO] Received prompt: {prompt}")
 
-        img1_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4().hex}_1.png")
-        with open(img1_path, "wb") as f:
-            f.write(await image1.read())
-        
+        # Create temporary files for uploaded images
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img1:
+            temp_img1.write(await image1.read())
+            img1_path = temp_img1.name
+
         image_paths = [img1_path]
 
-        if image2 is not None:
-            img2_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4().hex}_2.png")
-            with open(img2_path, "wb") as f:
-                f.write(await image2.read())
-            image_paths.append(img2_path)
+        if image2:
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img2:
+                temp_img2.write(await image2.read())
+                img2_path = temp_img2.name
+                image_paths.append(img2_path)
 
         src_refs = ",".join(image_paths)
-
         existing_files = set(os.listdir(OUTPUT_DIR))
 
         cmd = [
@@ -49,8 +48,18 @@ async def generate_video(prompt: str = Form(...),
             "--frame_num", "81"
         ]
 
-        print(f"[INFO] Running command: {' '.join(cmd)}")
-        subprocess.run(cmd, check=True)
+        print(f"[INFO] Running command asynchronously: {' '.join(cmd)}")
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        stdout, stderr = await process.communicate()
+
+        if process.returncode != 0:
+            print(f"[ERROR] Generation failed:\n{stderr.decode()}")
+            return JSONResponse(status_code=500, content={"error": stderr.decode()})
 
         new_files = set(os.listdir(OUTPUT_DIR)) - existing_files
         mp4_files = [f for f in new_files if f.endswith(".mp4")]
@@ -58,16 +67,17 @@ async def generate_video(prompt: str = Form(...),
         if not mp4_files:
             return JSONResponse(status_code=500, content={"error": "No .mp4 file was created."})
 
-        latest_file = max([os.path.join(OUTPUT_DIR, f) for f in mp4_files], key=os.path.getctime)
+        latest_file = max(
+            [os.path.join(OUTPUT_DIR, f) for f in mp4_files],
+            key=os.path.getctime
+        )
         print(f"[SUCCESS] Returning file: {latest_file}")
 
         return FileResponse(latest_file, media_type="video/mp4", filename=os.path.basename(latest_file))
 
-    except subprocess.CalledProcessError as e:
-        return JSONResponse(status_code=500, content={"error": f"Generation failed: {e}"})
     except Exception as e:
+        print(f"[EXCEPTION] {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
-
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=7860)
