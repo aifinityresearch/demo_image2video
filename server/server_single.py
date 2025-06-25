@@ -8,7 +8,7 @@ import glob
 app = FastAPI()
 
 IMAGE_DIR = "/home/ubuntu/VACE/demo_image2video/server/uploaded_images"
-RESULTS_DIR = "/home/ubuntu/VACE/demo_image2video/server/results/vace-1.3B"
+OUTPUT_DIR = "/home/ubuntu/VACE/demo_image2video/server/results/vace-1.3B"
 VACE_SCRIPT = "/home/ubuntu/VACE/vace/vace_wan_inference.py"
 MODEL_NAME = "vace-1.3B"
 CKPT_DIR = "/home/ubuntu/VACE/models/Wan2.1-VACE-1.3B"
@@ -20,7 +20,7 @@ os.makedirs(IMAGE_DIR, exist_ok=True)
 @app.post("/generate-video/")
 async def generate_video(prompt: str = Form(...), image: UploadFile = File(...)):
     print("Received a video generation request.")
-
+    existing_files = set(os.listdir(OUTPUT_DIR))
     # Save uploaded image
     image_id = str(uuid.uuid4())
     image_filename = f"{image_id}_{image.filename}"
@@ -55,12 +55,17 @@ async def generate_video(prompt: str = Form(...), image: UploadFile = File(...))
         return JSONResponse(status_code=500, content={"error": str(e)})
 
     # Search for the latest out_video.mp4 in timestamped result folders
-    video_candidates = glob.glob(os.path.join(RESULTS_DIR, "*", "out_video.mp4"))
-    if not video_candidates:
-        print("No output video file found.")
-        return JSONResponse(status_code=500, content={"error": "Video generation failed."})
+    new_files = set(os.listdir(OUTPUT_DIR)) - existing_files
+    mp4_candidates = [f for f in new_files if f.endswith(".mp4")]
 
-    latest_file = max(video_candidates, key=os.path.getctime)
-    print(f"Returning generated video: {latest_file}")
+    if not mp4_candidates:
+        print("[ERROR] No .mp4 file was created.")
+        return JSONResponse(status_code=500, content={"error": "Video generation failed. No .mp4 output found."})
 
+    # Grab the newest file (just in case)
+    full_paths = [os.path.join(OUTPUT_DIR, f) for f in mp4_candidates]
+    latest_file = max(full_paths, key=os.path.getctime)
+
+    print(f"[SUCCESS] Returning video file: {latest_file}")
     return FileResponse(latest_file, media_type="video/mp4", filename=os.path.basename(latest_file))
+
