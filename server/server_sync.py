@@ -47,7 +47,7 @@ async def generate_video(prompt: str = Form(...),
             "--frame_num", "81"
         ]
 
-        print(f"[INFO] Running command: {' '.join(cmd)}",,flush=True)
+        print(f"[INFO] Running command: {' '.join(cmd)}",flush=True)
         subprocess.run(cmd, check=True)
 
         new_files = set(os.listdir(OUTPUT_DIR)) - existing_files
