@@ -59,9 +59,7 @@ async def generate_video(prompt: str = Form(...), image: UploadFile = File(...))
         return JSONResponse(status_code=500, content={"error": str(e)})
 
     # Search for the latest out_video.mp4 in timestamped result folders
-    new_files = set(os.listdir(OUTPUT_DIR)) - existing_files
-    mp4_candidates = [f for f in new_files if f.endswith(".mp4")]
-
+    mp4_candidates = glob.glob(os.path.join(OUTPUT_DIR, "*", "out_video.mp4"))
     if not mp4_candidates:
         print("[ERROR] No .mp4 file was created.")
         return JSONResponse(status_code=500, content={"error": "Video generation failed. No .mp4 output found."})
