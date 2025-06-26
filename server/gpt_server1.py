@@ -1,0 +1,94 @@
+import os
+import uuid
+import subprocess
+from fastapi import FastAPI, File, UploadFile, Form
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Paths relative to where main.py is executed
+CURRENT_DIR = os.getcwd()
+MODEL_NAME = "vace1.3b"
+IMAGE_DIR = os.path.join(CURRENT_DIR, "assets/images")
+RESULTS_DIR = os.path.join(CURRENT_DIR, "results", MODEL_NAME)
+CKPT_DIR = "/home/ubuntu/VACE/models/Wan2.1-VACE-1.3B"
+VACE_SCRIPT_PATH = "/home/ubuntu/VACE/vace/vace_wan_inference.py"
+
+@app.post("/generate_video/")
+async def generate_video(
+    prompt: str = Form(...),
+    ref_img_1: UploadFile = File(...),
+    ref_img_2: UploadFile = File(...),
+    size: str = Form("480p"),
+    frame_num: int = Form(81),
+):
+    print("📥 Received request to generate video.", flush=True)
+    print(f"Prompt: {prompt}", flush=True)
+    print(f"Current Working Directory: {CURRENT_DIR}", flush=True)
+
+    session_id = uuid.uuid4().hex
+    session_dir = os.path.join(IMAGE_DIR, session_id)
+    os.makedirs(session_dir, exist_ok=True)
+    print(f"📁 Created session directory: {session_dir}", flush=True)
+
+    ref_path_1 = os.path.join(session_dir, f"img1_{uuid.uuid4().hex[:6]}.jpg")
+    ref_path_2 = os.path.join(session_dir, f"img2_{uuid.uuid4().hex[:6]}.jpg")
+
+    with open(ref_path_1, "wb") as f1:
+        data1 = await ref_img_1.read()
+        f1.write(data1)
+    with open(ref_path_2, "wb") as f2:
+        data2 = await ref_img_2.read()
+        f2.write(data2)
+
+    print(f"🖼️ Saved reference image 1 at: {ref_path_1}", flush=True)
+    print(f"🖼️ Saved reference image 2 at: {ref_path_2}", flush=True)
+
+    command = [
+        "python3", VACE_SCRIPT_PATH,
+        "--model_name", MODEL_NAME,
+        "--ckpt_dir", CKPT_DIR,
+        "--prompt", prompt,
+        "--src_ref_images", f"{ref_path_1},{ref_path_2}",
+        "--size", size,
+        "--frame_num", str(frame_num),
+    ]
+    print(f"🚀 Running command:\n{' '.join(command)}", flush=True)
+
+    process = subprocess.run(command, cwd="/home/ubuntu/VACE", capture_output=True, text=True)
+    print("✅ Model command executed.", flush=True)
+    print("STDOUT:\n", process.stdout, flush=True)
+    print("STDERR:\n", process.stderr, flush=True)
+
+    if process.returncode != 0:
+        print("❌ Video generation failed.", flush=True)
+        return {"error": "Video generation failed", "details": process.stderr}
+
+    if not os.path.exists(RESULTS_DIR):
+        print(f"❌ Results directory not found: {RESULTS_DIR}", flush=True)
+        return {"error": f"Results directory not found: {RESULTS_DIR}"}
+
+    subdirs = [os.path.join(RESULTS_DIR, d) for d in os.listdir(RESULTS_DIR)
+               if os.path.isdir(os.path.join(RESULTS_DIR, d))]
+    if not subdirs:
+        print("❌ No output folders found in results directory.", flush=True)
+        return {"error": "No output folders in results directory."}
+
+    latest_dir = max(subdirs, key=os.path.getmtime)
+    print(f"📂 Latest result directory: {latest_dir}", flush=True)
+
+    video_path = os.path.join(latest_dir, "out_video.mp4")
+    if not os.path.exists(video_path):
+        print(f"❌ Video file not found at: {video_path}", flush=True)
+        return {"error": f"Video file not found at: {video_path}"}
+
+    print(f"✅ Video successfully generated at: {video_path}", flush=True)
+    return FileResponse(video_path, media_type="video/mp4", filename="generated_video.mp4")
