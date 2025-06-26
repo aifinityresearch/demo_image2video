@@ -1,4 +1,5 @@
 import os
+import sys
 import uuid
 import subprocess
 from fastapi import FastAPI, File, UploadFile, Form
@@ -17,8 +18,9 @@ app.add_middleware(
 # Paths relative to where main.py is executed
 CURRENT_DIR = os.getcwd()
 MODEL_NAME = "vace-1.3B"
+VACE_WORK_DIR = "/home/ubuntu/VACE"
 IMAGE_DIR = os.path.join(CURRENT_DIR, "assets/images")
-RESULTS_DIR = os.path.join(CURRENT_DIR, "results", MODEL_NAME)
+RESULTS_DIR = os.path.join(VACE_WORK_DIR, "results", MODEL_NAME)
 CKPT_DIR = "/home/ubuntu/VACE/models/Wan2.1-VACE-1.3B"
 VACE_SCRIPT_PATH = "/home/ubuntu/VACE/vace/vace_wan_inference.py"
 
@@ -58,7 +60,8 @@ async def generate_video(
     ]
     print(f"🚀 Running command:\n{' '.join(command)}", flush=True)
 
-    process = subprocess.run(command, cwd="/home/ubuntu/VACE", capture_output=True, text=True)
+    #process = subprocess.run(command, cwd="/home/ubuntu/VACE", capture_output=True, text=True)
+    process = subprocess.run(command, cwd="/home/ubuntu/VACE", stdout=sys.stdout, stderr=sys.stderr, text=True)
     print("✅ Model command executed.", flush=True)
     print("STDOUT:\n", process.stdout, flush=True)
     print("STDERR:\n", process.stderr, flush=True)
