@@ -9,19 +9,19 @@ cd /home/ubuntu/VACE
 git clone https://github.com/aifinityresearch/demo_image2video.git
 
 cd /demo_image2video/server
-# run the server in backgrund 
+# Run the server in backgrund 
 nohup uvicorn server:app --host 0.0.0.0 --port 7860 > log.log 2>&1 &
-# to check status and debug messages
+# To check status and debug messages
 tail -f log.log 
-# to kill the instance 
+# To kill the running instance 
 ps -aux | grep python # note down the PID
 kill PID
 
-# to download .mp4 output manually to laptop . Run from Windows Powershell 
+# To download .mp4 output manually from EC2 to laptop . Run from Windows Powershell 
 
 scp -i WAN_Server.pem ubuntu@13.232.209.100:/home/ubuntu/VACE/results/vace-1.3B/2025-06-26-06-10-57/out_video.mp4 .
 
-# to check if model is running good or not 
+# To check if model is running good or not 
 cd /VACE
 python3 vace/vace_wan_inference.py \
   --model_name vace-1.3B \
