@@ -25,8 +25,7 @@ VACE_SCRIPT_PATH = "/home/ubuntu/VACE/vace/vace_wan_inference.py"
 @app.post("/generate_video/")
 async def generate_video(
     prompt: str = Form(...),
-    ref_img_1: UploadFile = File(...),
-    ref_img_2: UploadFile = File(...),
+    ref_img: UploadFile = File(...),
     size: str = Form("480p"),
     frame_num: int = Form(81),
 ):
@@ -39,25 +38,21 @@ async def generate_video(
     os.makedirs(session_dir, exist_ok=True)
     print(f"📁 Created session directory: {session_dir}", flush=True)
 
-    ref_path_1 = os.path.join(session_dir, f"img1_{uuid.uuid4().hex[:6]}.jpg")
-    ref_path_2 = os.path.join(session_dir, f"img2_{uuid.uuid4().hex[:6]}.jpg")
+    ref_path = os.path.join(session_dir, f"img_{uuid.uuid4().hex[:6]}.jpg")
+   
 
     with open(ref_path_1, "wb") as f1:
-        data1 = await ref_img_1.read()
+        data1 = await ref_img.read()
         f1.write(data1)
-    with open(ref_path_2, "wb") as f2:
-        data2 = await ref_img_2.read()
-        f2.write(data2)
-
-    print(f"🖼️ Saved reference image 1 at: {ref_path_1}", flush=True)
-    print(f"🖼️ Saved reference image 2 at: {ref_path_2}", flush=True)
-
+    
+    print(f"🖼️ Saved ref image at: {ref_path}", flush=True)
+    
     command = [
         "python3", VACE_SCRIPT_PATH,
         "--model_name", MODEL_NAME,
         "--ckpt_dir", CKPT_DIR,
         "--prompt", prompt,
-        "--src_ref_images", f"{ref_path_1},{ref_path_2}",
+        "--src_ref_images", ref_path,
         "--size", size,
         "--frame_num", str(frame_num),
     ]
