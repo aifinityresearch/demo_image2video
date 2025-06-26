@@ -1,5 +1,7 @@
 # demo_image2video
 Image2Video using Wan2.1-VACE-1.3B  Model 
+Follow the attached step-by-step tutorial to configure AWS EC2 g5.2xlarge CPU with NVIDIA AMI Deep Learning OSS Nvidia Driver AMI GPUPyTorch 2.7 (Ubuntu 22.04)
+
 Wan2.1 VACE is a state-of-the-art, all-in-one open-source AI model designed to revolutionize video creation and editing.
 It offers broad accessibility by supporting consumer-grade  GPUs, making advanced AI video tools available to more users.
 Wan2.1 VACE excels in diverse tasks including Text-to-Video, Image-to-Video, AI video editing, and unique visual text generation.
