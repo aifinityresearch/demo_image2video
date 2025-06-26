@@ -1,90 +1,92 @@
-from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.responses import FileResponse, JSONResponse
-import subprocess
 import os
+import sys
 import uuid
-import uvicorn
-import tempfile
-import asyncio
+import subprocess
+from fastapi import FastAPI, File, UploadFile, Form
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-@app.middleware("http")
-async def log_all_requests(request, call_next):
-    print(f"[DEBUG] Incoming request: {request.method} {request.url}")
-    response = await call_next(request)
-    return response
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+# Paths relative to where main.py is executed
+CURRENT_DIR = os.getcwd()
+MODEL_NAME = "vace-1.3B"
+VACE_WORK_DIR = "/home/ubuntu/VACE"
+IMAGE_DIR = os.path.join(CURRENT_DIR, "assets/images")
+RESULTS_DIR = os.path.join(VACE_WORK_DIR, "results", MODEL_NAME)
+CKPT_DIR = "/home/ubuntu/VACE/models/Wan2.1-VACE-1.3B"
+VACE_SCRIPT_PATH = "/home/ubuntu/VACE/vace/vace_wan_inference.py"
 
-# Paths
-SCRIPT_PATH = "/home/ubuntu/VACE/vace/vace_wan_inference.py"
-MODEL_DIR = "/home/ubuntu/VACE/models/Wan2.1-VACE-1.3B"
-OUTPUT_DIR = os.getcwd()
+@app.post("/generate_video/")
+async def generate_video(
+    prompt: str = Form(...),
+    ref_img: UploadFile = File(...),
+    size: str = Form("480p"),
+    frame_num: int = Form(81),
+):
+    print("📥 Received request to generate video.", flush=True)
+    print(f"Prompt: {prompt}", flush=True)
+    print(f"Current Working Directory: {CURRENT_DIR}", flush=True)
 
-@app.post("/generate_i2v")
-async def generate_video(prompt: str = Form(...),
-                         image1: UploadFile = File(...),
-                         image2: UploadFile = File(None)):
+    session_id = uuid.uuid4().hex
+    session_dir = os.path.join(IMAGE_DIR, session_id)
+    os.makedirs(session_dir, exist_ok=True)
+    print(f"📁 Created session directory: {session_dir}", flush=True)
 
-    try:
-        print(f"[INFO] Received prompt: {prompt}")
+    ref_path = os.path.join(session_dir, f"img_{uuid.uuid4().hex[:6]}.jpg")
+   
 
-        # Create temporary files for uploaded images
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img1:
-            temp_img1.write(await image1.read())
-            img1_path = temp_img1.name
+    with open(ref_path, "wb") as f1:
+        data1 = await ref_img.read()
+        f1.write(data1)
+    
+    print(f"🖼️ Saved ref image at: {ref_path}", flush=True)
+    
+    command = [
+        "python3", VACE_SCRIPT_PATH,
+        "--model_name", MODEL_NAME,
+        "--ckpt_dir", CKPT_DIR,
+        "--prompt", prompt,
+        "--src_ref_images", ref_path,
+        "--size", size,
+        "--frame_num", str(frame_num),
+    ]
+    print(f"🚀 Running command:\n{' '.join(command)}", flush=True)
 
-        image_paths = [img1_path]
+    #process = subprocess.run(command, cwd="/home/ubuntu/VACE", capture_output=True, text=True)
+    process = subprocess.run(command, cwd="/home/ubuntu/VACE", stdout=sys.stdout, stderr=sys.stderr, text=True)
+    print("✅ Model command executed.", flush=True)
+    print("STDOUT:\n", process.stdout, flush=True)
+    print("STDERR:\n", process.stderr, flush=True)
 
-        if image2:
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img2:
-                temp_img2.write(await image2.read())
-                img2_path = temp_img2.name
-                image_paths.append(img2_path)
+    if process.returncode != 0:
+        print("❌ Video generation failed.", flush=True)
+        return {"error": "Video generation failed", "details": process.stderr}
 
-        src_refs = ",".join(image_paths)
-        existing_files = set(os.listdir(OUTPUT_DIR))
+    if not os.path.exists(RESULTS_DIR):
+        print(f"❌ Results directory not found: {RESULTS_DIR}", flush=True)
+        return {"error": f"Results directory not found: {RESULTS_DIR}"}
 
-        cmd = [
-            "python3", SCRIPT_PATH,
-            "--model_name", "vace-1.3B",
-            "--ckpt_dir", MODEL_DIR,
-            "--prompt", prompt,
-            "--src_ref_images", src_refs,
-            "--size", "480p",
-            "--frame_num", "81"
-        ]
+    subdirs = [os.path.join(RESULTS_DIR, d) for d in os.listdir(RESULTS_DIR)
+               if os.path.isdir(os.path.join(RESULTS_DIR, d))]
+    if not subdirs:
+        print("❌ No output folders found in results directory.", flush=True)
+        return {"error": "No output folders in results directory."}
 
-        print(f"[INFO] Running command asynchronously: {' '.join(cmd)}")
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
+    latest_dir = max(subdirs, key=os.path.getmtime)
+    print(f"📂 Latest result directory: {latest_dir}", flush=True)
 
-        stdout, stderr = await process.communicate()
+    video_path = os.path.join(latest_dir, "out_video.mp4")
+    if not os.path.exists(video_path):
+        print(f"❌ Video file not found at: {video_path}", flush=True)
+        return {"error": f"Video file not found at: {video_path}"}
 
-        if process.returncode != 0:
-            print(f"[ERROR] Generation failed:\n{stderr.decode()}")
-            return JSONResponse(status_code=500, content={"error": stderr.decode()})
-
-        new_files = set(os.listdir(OUTPUT_DIR)) - existing_files
-        mp4_files = [f for f in new_files if f.endswith(".mp4")]
-
-        if not mp4_files:
-            return JSONResponse(status_code=500, content={"error": "No .mp4 file was created."})
-
-        latest_file = max(
-            [os.path.join(OUTPUT_DIR, f) for f in mp4_files],
-            key=os.path.getctime
-        )
-        print(f"[SUCCESS] Returning file: {latest_file}")
-
-        return FileResponse(latest_file, media_type="video/mp4", filename=os.path.basename(latest_file))
-
-    except Exception as e:
-        print(f"[EXCEPTION] {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-if __name__ == "__main__":
-    uvicorn.run("server:app", host="0.0.0.0", port=7860)
+    print(f"✅ Video successfully generated at: {video_path}", flush=True)
+    return FileResponse(video_path, media_type="video/mp4", filename="generated_video.mp4")
