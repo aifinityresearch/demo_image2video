@@ -41,7 +41,7 @@ async def generate_video(
     ref_path = os.path.join(session_dir, f"img_{uuid.uuid4().hex[:6]}.jpg")
    
 
-    with open(ref_path_1, "wb") as f1:
+    with open(ref_path, "wb") as f1:
         data1 = await ref_img.read()
         f1.write(data1)
     
