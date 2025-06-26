@@ -16,7 +16,7 @@ app.add_middleware(
 
 # Paths relative to where main.py is executed
 CURRENT_DIR = os.getcwd()
-MODEL_NAME = "vace1.3b"
+MODEL_NAME = "vace-1.3B"
 IMAGE_DIR = os.path.join(CURRENT_DIR, "assets/images")
 RESULTS_DIR = os.path.join(CURRENT_DIR, "results", MODEL_NAME)
 CKPT_DIR = "/home/ubuntu/VACE/models/Wan2.1-VACE-1.3B"
